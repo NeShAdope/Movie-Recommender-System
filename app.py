@@ -2,12 +2,18 @@ import streamlit as st
 import pickle
 import pandas as pd
 import requests
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 import gdown
 import os
+import time
 
 # Google Drive file IDs (from share links)
 SIMILARITY_PKL_ID = "1AeBUX_70AocYjhg7qyV3lcktmGsqlFAd"
 TMDB_CSV_ID = "1NS5Hr7nhTI1KxAPWhhxHIDdF1pVuhMPv"
+
+# Placeholder when TMDB is unreachable
+NO_POSTER_URL = "https://via.placeholder.com/500x750?text=No+Poster"
 
 def get_drive_file(file_id, dest_path):
     """Download file from Google Drive if not already present."""
@@ -16,10 +22,24 @@ def get_drive_file(file_id, dest_path):
         gdown.download(url, dest_path, quiet=False)
     return dest_path
 
+def _session_with_retries():
+    session = requests.Session()
+    retry = Retry(total=3, backoff_factor=0.5, status_forcelist=[500, 502, 503])
+    session.mount("https://", HTTPAdapter(max_retries=retry))
+    return session
+
 def poster(movie_id):
-    response=requests.get('https://api.themoviedb.org/3/movie/{}?api_key=20e863b021e2f5f89f0f46d621aa9716&language=en-US'.format(movie_id))
-    data = response.json()
-    return "https://image.tmdb.org/t/pdata"+data['poster_path']
+    url = "https://api.themoviedb.org/3/movie/{}?api_key=20e863b021e2f5f89f0f46d621aa9716&language=en-US".format(movie_id)
+    try:
+        response = _session_with_retries().get(url, timeout=10)
+        response.raise_for_status()
+        data = response.json()
+        path = data.get("poster_path")
+        if path:
+            return "https://image.tmdb.org/t/p/w500" + path
+    except (requests.RequestException, KeyError):
+        pass
+    return NO_POSTER_URL
 
 
 def recommend(movie):
@@ -32,6 +52,7 @@ def recommend(movie):
     for i in movies_list:
         reco_list.append(movies.iloc[i[0]].title)
         reco_poster.append(poster(movies.iloc[i[0]].id))
+        time.sleep(0.2)  # avoid connection resets from rapid requests
     return reco_list,reco_poster
 
 movie_dict=pickle.load(open('movie_dict.pkl','rb'))
