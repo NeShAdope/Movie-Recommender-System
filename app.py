@@ -2,6 +2,19 @@ import streamlit as st
 import pickle
 import pandas as pd
 import requests
+import gdown
+import os
+
+# Google Drive file IDs (from share links)
+SIMILARITY_PKL_ID = "1AeBUX_70AocYjhg7qyV3lcktmGsqlFAd"
+TMDB_CSV_ID = "1NS5Hr7nhTI1KxAPWhhxHIDdF1pVuhMPv"
+
+def get_drive_file(file_id, dest_path):
+    """Download file from Google Drive if not already present."""
+    if not os.path.exists(dest_path):
+        url = f"https://drive.google.com/uc?id={file_id}"
+        gdown.download(url, dest_path, quiet=False)
+    return dest_path
 
 def poster(movie_id):
     response=requests.get('https://api.themoviedb.org/3/movie/{}?api_key=20e863b021e2f5f89f0f46d621aa9716&language=en-US'.format(movie_id))
@@ -24,7 +37,8 @@ def recommend(movie):
 movie_dict=pickle.load(open('movie_dict.pkl','rb'))
 movies=pd.DataFrame(movie_dict)
 
-similarity=pickle.load(open('similarity.pkl','rb'))
+similarity_path = get_drive_file(SIMILARITY_PKL_ID, "similarity.pkl")
+similarity=pickle.load(open(similarity_path,'rb'))
 
 st.title('Movie Recommender System')
 
